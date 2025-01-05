@@ -1,0 +1,5 @@
+pyshark
+pandas
+scikit-learn
+matplotlib
+plotly
