@@ -26,7 +26,8 @@ column_names = [
 train_data.columns = column_names
 test_data.columns = column_names
 
-
+train_data.drop('difficulty_level', axis=1)
+test_data.drop('difficulty_level', axis=1)
 
 train_data['label'] = train_data['label'].apply(lambda x: 0 if x == 'normal' else 1)
 test_data['label'] = test_data['label'].apply(lambda x: 0 if x == 'normal' else 1)
