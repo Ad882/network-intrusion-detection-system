@@ -29,7 +29,6 @@ def check_permissions():
 
 def extract_features(packet):
     try:
-        # Informations de base sur le paquet
         timestamp = packet.sniff_time
         protocol = packet.transport_layer if hasattr(packet, 'transport_layer') else 'unknown'
         length = int(packet.length)
@@ -43,20 +42,18 @@ def extract_features(packet):
         )
         tcp_flags = packet.tcp.flags if hasattr(packet, 'tcp') else None
 
-        # Basic features
         features = {
-            'duration': 0,  # Durée d'une seule capture = 0
+            'duration': 0,
             'protocol_type': protocol.lower() if protocol else 'unknown',
-            'service': dst_port,  # Mapping du port au service (ex: 80 = HTTP)
-            'flag': 'SF' if tcp_flags and int(tcp_flags, 16) & 0x12 else 'OTH',  # SYN-ACK ou autre
+            'service': dst_port,
+            'flag': 'SF' if tcp_flags and int(tcp_flags, 16) & 0x12 else 'OTH',
             'src_bytes': length if src_port else 0,
             'dst_bytes': length if dst_port else 0,
             'land': 1 if src_ip == dst_ip and src_port == dst_port else 0,
-            'wrong_fragment': 0,  # Placeholder (à calculer si nécessaire)
-            'urgent': 0,  # Placeholder (à extraire si le paquet a des flags urgents)
+            'wrong_fragment': 0, 
+            'urgent': 0,
         }
 
-        # Ajout des connexions à l'historique
         connections.append({
             'timestamp': timestamp,
             'src_ip': src_ip,
@@ -66,14 +63,12 @@ def extract_features(packet):
             'flag': features['flag']
         })
 
-        # Analyse basée sur une fenêtre glissante
         current_time = time.time()
-        window_size = 2  # Fenêtre de 2 secondes
+        window_size = 2
         recent_connections = [
             conn for conn in connections if (current_time - conn['timestamp'].timestamp()) < window_size
         ]
 
-        # Calcul des statistiques
         serror_count = len([conn for conn in recent_connections if conn['flag'] == 'S0'])
         srv_serror_count = len([conn for conn in recent_connections if conn['flag'] == 'S0' and conn['dst_ip'] == dst_ip])
         rerror_count = len([conn for conn in recent_connections if conn['flag'] in ['REJ', 'RSTO']])
