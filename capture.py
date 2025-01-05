@@ -8,7 +8,8 @@ from datetime import datetime
 from collections import deque
 import time
 from sklearn.preprocessing import LabelEncoder
-import pickle 
+import numpy as np
+import pickle
 
 connections = deque(maxlen=1000)
 
@@ -136,22 +137,15 @@ def capture_traffic(interface, output_file, capture_duration):
     print(f"Capture complete. Data saved in {output_file}")
 
 
-def encode_features(features):
-    le_protocol = LabelEncoder()
-    le_flag = LabelEncoder()
-    le_service = LabelEncoder()
-
-    features['protocol_type'] = le_protocol.fit_transform([features['protocol_type']])[0]
-    features['flag'] = le_flag.fit_transform([features['flag']])[0]
-    features['service'] = le_service.fit_transform([features['service']])[0]
-
-    return features
-
-
-def live_capture_traffic(interface, model_file):
+def live_capture_traffic(interface, model_file, encoders_file):
     with open(model_file, 'rb') as file:
         model = pickle.load(file)
 
+    with open(encoders_file, 'rb') as f:
+        encoders = pickle.load(f)
+
+    categorical_columns = ['protocol_type', 'service', 'flag']
+    
     capture = pyshark.LiveCapture(interface=interface)
     
     try:
@@ -159,7 +153,22 @@ def live_capture_traffic(interface, model_file):
             features = extract_features(packet)
             if features:
                 print("Packet received")
-                encode_features(features)
+                for col in categorical_columns:
+                    try:
+                        features[col] = encoders[col].transform([features[col]])[0]
+
+                    except:
+                        new_label = features[col]
+                        encoder = encoders[col]
+
+                        if new_label not in encoder.classes_:
+                            encoder.classes_ = np.append(encoder.classes_, new_label)
+
+                        with open(encoders_file, 'wb') as f:
+                            pickle.dump(encoders, f)
+
+                        features[col] = encoder.transform([features[col]])[0]
+
                 features = pd.DataFrame([features])
                 prediction = model.predict(features)
                 print("Outlier detected!" if prediction[0] == 'attack' else "Normal")

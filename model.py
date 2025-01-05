@@ -33,11 +33,15 @@ def train_model():
     test_data['label'] = test_data['label'].apply(lambda x: 0 if x == 'normal' else 1)
 
     categorical_columns = ['protocol_type', 'service', 'flag']
+    encoders = {}
     for col in categorical_columns:
         encoder = LabelEncoder()
         train_data[col] = encoder.fit_transform(train_data[col])
-        test_data[col] = encoder.fit_transform(test_data[col])
+        test_data[col] = encoder.transform(test_data[col])
+        encoders[col] = encoder 
 
+    with open('encoders/label_encoders.pkl', 'wb') as f:
+        pickle.dump(encoders, f)
 
 
     columns_to_drop = [

@@ -1,17 +1,32 @@
 import pandas as pd
-from sklearn.preprocessing import LabelEncoder
 import pickle
+import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 
 
-def preprocessing(capture_file):
+def preprocessing(capture_file, encoders_file):
+    with open(encoders_file, 'rb') as f:
+        encoders = pickle.load(f)
+
     data = pd.read_csv(capture_file)
 
     categorical_columns = ['protocol_type', 'service', 'flag']
     for col in categorical_columns:
-        encoder = LabelEncoder()
-        data[col] = encoder.fit_transform(data[col])
+        try:
+            data[col] = encoders[col].fit_transform(data[col])
+
+        except:
+            new_label = data[col]
+            encoder = encoders[col]
+
+            if new_label not in encoder.classes_:
+                encoder.classes_ = np.append(encoder.classes_, new_label)
+
+            with open(encoders_file, 'wb') as f:
+                pickle.dump(encoders, f)
+
+            data[col] = encoders[col].fit_transform(data[col])
 
     return data
 
