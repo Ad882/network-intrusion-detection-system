@@ -10,6 +10,8 @@ import time
 from sklearn.preprocessing import LabelEncoder
 import numpy as np
 import pickle
+import streamlit as st
+from utils import is_streamlit
 
 connections = deque(maxlen=1000)
 
@@ -20,13 +22,22 @@ def check_permissions():
         groups = [g.gr_name for g in grp.getgrall() if user_name in g.gr_mem]
         
         if 'wireshark' in groups:
-            print("The user has the necessary permissions to capture packets.\n---")
+            if is_streamlit():
+                st.success("✅ The user has the necessary permissions to capture packets.")
+            else:
+                print("The user has the necessary permissions to capture packets.\n---")
         else:
-            print("The user does not have the necessary permissions. Please add the user to the 'wireshark' group.")
+            if is_streamlit():
+                st.error("🚨 The user does not have the necessary permissions. Please add the user to the 'wireshark' group.")
+            else:
+                print("The user does not have the necessary permissions. Please add the user to the 'wireshark' group.")
             sys.exit(1)
     
     except Exception as e:
-        print(f"Error checking permissions: {e}")
+        if is_streamlit():
+            st.error(f"Error checking permissions: {e}")
+        else:
+            print(f"Error checking permissions: {e}")
         sys.exit(1)
 
 

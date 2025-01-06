@@ -106,7 +106,6 @@ def main():
         elif real_time_capture == "No":
             perform_capture = st.selectbox("A network capture is already provided. Should a new network capture be made?", ["", "Yes, make a new capture", "No, use the given one"])
             if (perform_capture == "Yes, make a new capture") and ('capture_done' not in st.session_state):
-                capture_duration = st.slider("Choose a listening duration", min_value=0, max_value=120, value=0, step=5)
                 interface = st.radio("Choose a network interface:", ["wlp1s0", "eth0", "lo", "tun0", "docker0"], index=2)
                 with st.expander("To see all the interfaces available on a machine: (click to expand)"):
                     st.markdown("""
@@ -136,6 +135,8 @@ def main():
                         unsafe_allow_html=True
                     )
 
+                capture_duration = st.slider("Choose a listening duration", min_value=0, max_value=120, value=0, step=5)
+
                 
                 if capture_duration > 0:
                     st.success(f"Capture duration set to {capture_duration} seconds with interface {interface}.")
@@ -143,7 +144,7 @@ def main():
                         check_permissions()
                         capture_traffic(interface, capture_file, capture_duration)
                         st.session_state.capture_done = True
-
+                    st.success(f"Capture complete!")
                 else:
                     st.warning("Please set a valid capture duration (greater than 0).")
                 
@@ -153,8 +154,11 @@ def main():
 
 
             if 'capture_done' in st.session_state:
-                st.header("Detecting network anomalies")
                 data = preprocessing(capture_file, encoders_file)
+                nb_packets = len(data)
+                a, _, _ = st.columns(3)
+                a.metric(label="Packets captured", value=nb_packets, border=True)
+                st.header("Detecting network anomalies")
                 
                 feature = st.radio("Select feature for anomalie detection:", ["flag", "count", "src_bytes", "dst_bytes"], index=0)
                 if feature:
