@@ -3,7 +3,8 @@ import pickle
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-
+import streamlit as st
+from utils import is_streamlit
 
 def preprocessing(capture_file, encoders_file):
     with open(encoders_file, 'rb') as f:
@@ -31,17 +32,15 @@ def preprocessing(capture_file, encoders_file):
     return data
 
 
-def find_outliers(data, model_file, feature):
+def find_anomalies(data, model_file, feature):
     with open(model_file, 'rb') as file:
         model = pickle.load(file)
 
     data['label'] = model.predict(data)
 
-    outliers = data[data['label'] == 1]
-    detected_outliers = len(outliers)
-    non_outliers = len(data) - len(outliers)
-    print(f"Number of detected outliers: {detected_outliers}")
-    print(f"Number of detected non outliers: {non_outliers}")
+    anomalies = data[data['label'] == 1]
+    detected_anomalies = len(anomalies)
+    non_anomalies = len(data) - len(anomalies)
 
     fig = go.Figure()
 
@@ -54,19 +53,26 @@ def find_outliers(data, model_file, feature):
     ))
 
     fig.add_trace(go.Scatter(
-        x=outliers.index,
-        y=outliers[feature],
+        x=anomalies.index,
+        y=anomalies[feature],
         mode='markers',
         marker=dict(color='red', size=8, line=dict(width=1, color='black')),
-        name='Outliers'
+        name='anomalies'
     ))
 
     fig.update_layout(
-        title=f'Visualization of Detected Outliers ({feature})',
+        title=f'Visualization of Detected anomalies ({feature})',
         xaxis_title='Index',
         yaxis_title=feature,
         legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
         template='plotly_white'
     )
 
-    fig.show()
+    if is_streamlit():
+        st.plotly_chart(fig)
+        st.write(f"Number of detected anomalies: {detected_anomalies}")
+        st.write(f"Number of detected non anomalies: {non_anomalies}")
+    else:
+        print(f"Number of detected anomalies: {detected_anomalies}")
+        print(f"Number of detected non anomalies: {non_anomalies}")
+        fig.show()

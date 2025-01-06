@@ -171,7 +171,7 @@ def live_capture_traffic(interface, model_file, encoders_file):
 
                 features = pd.DataFrame([features])
                 prediction = model.predict(features)
-                print("Outlier detected!" if prediction[0] == 'attack' else "Normal")
+                print("anomalie detected!" if prediction[0] == 'attack' else "Normal")
 
     except Exception as e:
         print(f"Error during capture: {e}")

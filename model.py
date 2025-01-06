@@ -1,10 +1,12 @@
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, classification_report
+from sklearn.metrics import accuracy_score, f1_score, classification_report
 from sklearn.metrics import roc_auc_score, roc_curve
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 import pickle
+import streamlit as st
+from utils import is_streamlit
 
 
 def train_model():
@@ -51,7 +53,6 @@ def train_model():
         'is_host_login', 'is_guest_login', 'difficulty_level'
     ]
 
-    # Suppression des colonnes inutiles
     train_data = train_data.drop(columns=columns_to_drop, axis=1)
     test_data = test_data.drop(columns=columns_to_drop, axis=1)
 
@@ -74,18 +75,42 @@ def train_model():
 
 
 def evaluate_model(X_test, y_test, y_pred, model):
-    print("Accuracy:", accuracy_score(y_test, y_pred))
-    print(classification_report(y_test, y_pred))
+    if is_streamlit():
+        st.write("Accuracy:", accuracy_score(y_test, y_pred))
+        st.write("F1-score:", f1_score(y_test, y_pred))
+        y_proba = model.predict_proba(X_test)[:, 1]
+        fpr, tpr, _ = roc_curve(y_test, y_proba)
 
-    y_proba = model.predict_proba(X_test)[:, 1]
-    fpr, tpr, _ = roc_curve(y_test, y_proba)
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=fpr, y=tpr, mode='lines', name='ROC Curve'))
 
-    plt.figure(figsize=(10, 6))
-    plt.plot(fpr, tpr)
-    plt.xlabel("False Positive Rate")
-    plt.ylabel("True Positive Rate")
-    plt.title("ROC Curve")
-    plt.show()
+        fig.update_layout(
+            title="ROC Curve",
+            xaxis_title="False Positive Rate",
+            yaxis_title="True Positive Rate",
+            legend=dict(x=0.8, y=0.2)
+        )
+
+        st.plotly_chart(fig)
+        
+    else:
+        print("Accuracy:", accuracy_score(y_test, y_pred))
+        print("F1-score:", f1_score(y_test, y_pred))
+
+        y_proba = model.predict_proba(X_test)[:, 1]
+        fpr, tpr, _ = roc_curve(y_test, y_proba)
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=fpr, y=tpr, mode='lines', name='ROC Curve'))
+
+        fig.update_layout(
+            title="ROC Curve",
+            xaxis_title="False Positive Rate",
+            yaxis_title="True Positive Rate",
+            legend=dict(x=0.8, y=0.2)
+        )
+        
+        fig.show()
 
 
 def save_model(model):
