@@ -175,7 +175,7 @@ def main():
         if real_time_capture == "Yes":
             st.header("Real-Time Packet analysis")
 
-            interface = st.radio("Choose a network interface:", ["wlp1s0", "eth0", "lo", "tun0", "docker0"], index=0)
+            interface = st.radio("Choose a network interface:", ["wlp1s0", "eth0", "lo", "tun0", "custom"], index=0)
             with st.expander("To see all the interfaces available on a machine: (click to expand)"):
                 st.markdown("""
                             
@@ -203,6 +203,8 @@ def main():
                     ```""", 
                     unsafe_allow_html=True
                 )
+            if interface == "custom": 
+                interface = st.text_input("Enter the interface", "")
 
             st.write("Choose the stopping criterion:")
             max_capture_duration = st.slider("Choose the maximum listening duration", min_value=60, max_value=3600, value=600, step=60)
@@ -231,7 +233,7 @@ def main():
                         previous_count = packet_count
                         previous_anomaly_count = anomaly_count
 
-                        time.sleep(1)
+                        time.sleep(0.01)
                         packet_button.metric(label="Packets Received", value=packet_count, delta=packet_count - previous_count, border=True)
                         anomaly_button.metric(label="Anomalies Detected", value=anomaly_count, delta=anomaly_count - previous_anomaly_count, border=True)
                         
@@ -310,7 +312,7 @@ def main():
         elif real_time_capture == "No":
             perform_capture = st.selectbox("A network capture is already provided. Should a new network capture be made?", ["", "Yes, make a new capture", "No, use the given one"])
             if (perform_capture == "Yes, make a new capture") and ('capture_done' not in st.session_state):
-                interface = st.radio("Choose a network interface:", ["wlp1s0", "eth0", "lo", "tun0", "docker0"], index=2)
+                interface = st.radio("Choose a network interface:", ["wlp1s0", "eth0", "lo", "tun0", "custom"], index=2)
                 with st.expander("To see all the interfaces available on a machine: (click to expand)"):
                     st.markdown("""
                                 
@@ -338,6 +340,8 @@ def main():
                         ```""", 
                         unsafe_allow_html=True
                     )
+                if interface == "custom": 
+                    interface = st.text_input("Enter the interface", "")
 
                 capture_duration = st.slider("Choose a listening duration", min_value=0, max_value=120, value=0, step=5)
 
