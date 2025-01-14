@@ -329,14 +329,49 @@ Slowloris is a Python script to simulate a slow HTTP attack.
 
 ### **Detection settings**
 Make sure that your detection tool is configured to detect these patterns:
-- Network tracking:**
+- Network tracking
   - Scanning activity on several ports from the same IP.
-- DDoS:**
+- DDoS
   - High volume of packets from different IP addresses.
   - Packets with specific flags (e.g. TCP SYN without ACK).
 
 
+<br>
 
+To prevent the script from asking for a password when executing `sudo`, it is better to use a secure configuration with `sudo` instead of directly including a password in the script or a `.env` file, which would be a dangerous practice in terms of security.
+
+### Using `setcap` to Grant Permissions to `tcpdump`
+If you prefer not to use `sudo`, you can grant the necessary permissions to `tcpdump` so it can operate without administrative rights:
+
+1. **Check the Path to `tcpdump`:**  
+   Run the following command to find the path to `tcpdump`:
+   ```bash
+   which tcpdump
+   ```
+
+2. **Grant Special Permissions to `tcpdump`:**  
+   Execute the following command to allow `tcpdump` to capture packets without `sudo`:
+   ```bash
+   sudo setcap cap_net_raw,cap_net_admin=eip /usr/bin/tcpdump
+   ```
+   *Replace `/usr/bin/tcpdump` with the path provided by the `which tcpdump` command.*
+
+3. **Verify the Permissions:**  
+   Check that the permissions have been correctly applied:
+   ```bash
+   getcap /usr/bin/tcpdump
+   ```
+   *Replace `/usr/bin/tcpdump` with the path provided by the `which tcpdump` command.*
+
+
+**Warning**: permissions granted with setcap are not always permanent. 
+Certain actions, such as updating or reinstalling tcpdump, can reset these permissions.
+
+Check regularly whether the permissions are still active:
+```bash
+getcap /usr/bin/tcpdump
+```
+If the command returns nothing, this means that the permissions have been removed and need to be reapplied.
 
 
 <br>
