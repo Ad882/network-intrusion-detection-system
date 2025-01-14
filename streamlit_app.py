@@ -1,7 +1,7 @@
 import streamlit as st
 from model import train_model, evaluate_model, save_model 
-from capture import check_permissions, capture_traffic, extract_features
-from analysis import preprocessing, find_anomalies
+from capture import check_permissions
+from analysis import process_pcap, preprocessing, find_anomalies
 from streamlit_lottie import st_lottie
 import requests
 import time
@@ -11,22 +11,23 @@ import pickle
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import subprocess
+import os
+import dpkt
+import socket
+from collections import defaultdict
 
-packet_count = 0
-anomaly_count = 0
-begin = 0
-end = 0
+
+THRESHOLD_PACKETS = 100
+THRESHOLD_PORTS = 50
+MONITOR_INTERVAL = 5
+
+ip_packet_count = defaultdict(int)
+ip_target_count = defaultdict(set)
+port_scan_count = defaultdict(lambda: defaultdict(set))
+
 lock = threading.Lock()
 stop_event = threading.Event()
-src_mac = ""
-dst_mac = ""
-src_ip = ""
-dst_ip = ""
-src_port = 0
-dst_port = 0
-payload = ""
-highest_layer = ""
-length = 0
 
 
 def load_lottieurl(url):
@@ -36,86 +37,52 @@ def load_lottieurl(url):
     return r.json()
 
 
-def live_capture(interface, model_file, encoders_file):
-    global packet_count, anomaly_count, src_mac, dst_mac, src_ip, dst_ip, src_port, dst_port, payload, highest_layer, length
-
-    with open(model_file, 'rb') as file:
-        model = pickle.load(file)
-
-    with open(encoders_file, 'rb') as f:
-        encoders = pickle.load(f)
-
-    categorical_columns = ['protocol_type', 'service', 'flag']
-    capture = pyshark.LiveCapture(interface=interface)
-
+def analyze_packet(packet):
     try:
-        for packet in capture:
-            if stop_event.is_set():
-                break
-            with lock:
-                packet_count += 1
-
-            features = extract_features(packet)
-            if features:
-                for col in categorical_columns:
-                    try:
-                        features[col] = encoders[col].transform([features[col]])[0]
-                    except:
-                        new_label = features[col]
-                        encoder = encoders[col]
-
-                        if new_label not in encoder.classes_:
-                            encoder.classes_ = np.append(encoder.classes_, new_label)
-
-                        with open(encoders_file, 'wb') as f:
-                            pickle.dump(encoders, f)
-
-                        features[col] = encoder.transform([features[col]])[0]
-
-                features = pd.DataFrame([features])
-                prediction = model.predict(features)
-
-
-                if prediction[0] == 'attack':
-                    with lock:
-                        anomaly_count += 1
-
-                        if 'eth' in packet:
-                            src_mac = packet.eth.src
-                            dst_mac = packet.eth.dst
-
-                        if 'ip' in packet:
-                            src_ip = packet.ip.src
-                            dst_ip = packet.ip.dst
-
-                        if 'tcp' in packet:
-                            src_port = packet.tcp.srcport
-                            dst_port = packet.tcp.dstport
-                        elif 'udp' in packet:
-                            src_port = packet.udp.srcport
-                            dst_port = packet.udp.dstport
-
-                        if 'data' in packet:
-                            payload = packet.data.data
-
-                        if hasattr(packet, 'highest_layer'):
-                            highest_layer = packet.highest_layer
-
-                        if hasattr(packet, 'length'):
-                            length = packet.length
-
-                    
-    except Exception as e:
-        print(f"Error in live capture: {e}")
-    finally:
-        capture.close()
+        eth = dpkt.ethernet.Ethernet(packet)
+        if not isinstance(eth.data, dpkt.ip.IP):
+            return None, None, None
+        ip = eth.data
+        src_ip = socket.inet_ntoa(ip.src)
+        dst_ip = socket.inet_ntoa(ip.dst)
+        if isinstance(ip.data, (dpkt.tcp.TCP, dpkt.udp.UDP)):
+            transport = ip.data
+            dst_port = transport.dport
+            return src_ip, dst_ip, dst_port
+        return src_ip, dst_ip, None
+    except Exception:
+        return None, None, None
 
 
 
+def detect_anomalies(elapsed_time):
+    alerts = []
+    detected_ips = set()
 
+    for ip, count in ip_packet_count.items():
+        for dst_ip, ports in port_scan_count[ip].items():
+            if len(ports) > THRESHOLD_PORTS:
+                alert = f"ALERT: Possible port scan detected from {ip} targeting {dst_ip} with {len(ports)} ports scanned in {elapsed_time} seconds."
+                st.error(alert)
+                alerts.append(alert)
+                detected_ips.add(ip)
+                return alerts 
+            
+        if count > THRESHOLD_PACKETS and ip not in detected_ips:
+            alert = f"ALERT: Possible DDoS detected from {ip} with {count} packets in {elapsed_time} seconds."
+            st.error(alert)
+            alerts.append(alert)
+            return alerts  
+
+    return alerts
+
+
+
+#                    #
+##      MAIN        ##
+###                ###
 
 def main():
-    global packet_count, anomaly_count, begin, end, src_mac, dst_mac, src_ip, dst_ip, src_port, dst_port, payload, highest_layer, length
 
     st.title("Network Anomaly Detection 🕵️")
     lottie_animation = load_lottieurl("https://lottie.host/6d367c3b-9b60-458a-9d93-bc96bb87baf4/kJ5r7yl4Ka.json")
@@ -175,7 +142,7 @@ def main():
         if real_time_capture == "Yes":
             st.header("Real-Time Packet analysis")
 
-            interface = st.radio("Choose a network interface:", ["wlp1s0", "eth0", "lo", "tun0", "custom"], index=0)
+            interface = st.radio("Choose a network interface:", ["wlp1s0", "eth0", "lo", "custom"], index=0)
             with st.expander("To see all the interfaces available on a machine: (click to expand)"):
                 st.markdown("""
                             
@@ -213,106 +180,81 @@ def main():
             packet_button = st.empty()
             anomaly_button = st.empty()
 
-            capture_thread = threading.Thread(target=live_capture, args=(interface, model_file, encoders_file,))
-            capture_thread.daemon = True
-            anomalies_df = pd.DataFrame(columns=["src_mac", "dst_mac", "src_ip", "dst_ip", "src_port", "dst_port", "payload", "highest_layer", "length"])
+            capture = pyshark.LiveCapture(interface=interface, use_json=True, include_raw=True)
+            start_time = time.time()
+            count_time = time.time()
+            nb_packets = 0
+            previous_nb_packets = 0
+
             if "running" not in st.session_state:
                 st.session_state.running = False
             if start_button.button("Start Sniffing", icon="🚥", use_container_width=True) and not st.session_state.running:
                 with st.spinner('Capture in progress...'):
-                    capture_thread.start()
-                    begin = time.time()
                     st.session_state.running = True
 
-                    nw_status_placeholder = st.empty()
+                    for packet in capture.sniff_continuously():
+                        nb_packets += 1
 
-                    if anomaly_count == 0:
-                        nw_status_placeholder.success("Everything clear on the network!")
+                        elapsed_time = time.time() - count_time
+                        if elapsed_time >= 0.5:
+                            delta = nb_packets - previous_nb_packets
 
-                    while st.session_state.running:
-                        previous_count = packet_count
-                        previous_anomaly_count = anomaly_count
-
-                        time.sleep(0.01)
-                        packet_button.metric(label="Packets Received", value=packet_count, delta=packet_count - previous_count, border=True)
-                        anomaly_button.metric(label="Anomalies Detected", value=anomaly_count, delta=anomaly_count - previous_anomaly_count, border=True)
+                            packet_button.metric(label="Packets Received", value=nb_packets, delta=delta, border=True)
                         
-                        if anomaly_count - previous_anomaly_count != 0:
-                            nw_status_placeholder.error("Anomaly detected on the network!")
-                            new_anomaly = {
-                                "src_mac": src_mac,
-                                "dst_mac": dst_mac,
-                                "src_ip": src_ip,
-                                "dst_ip": dst_ip,
-                                "src_port": src_port,
-                                "dst_port": dst_port,
-                                "payload": payload,
-                                "highest_layer": highest_layer,
-                                "length": length
-                            }
-                            new_anomaly_df = pd.DataFrame([new_anomaly])
-                            anomalies_df = pd.concat([anomalies_df, new_anomaly_df], ignore_index=True)
+                            previous_nb_packets = nb_packets
+                            count_time = time.time()
+
+                        raw_packet = bytes(packet.get_raw_packet())
+                        src_ip, dst_ip, dst_port = analyze_packet(raw_packet)
+                        if src_ip and dst_ip:
+                            ip_packet_count[src_ip] += 1
+                            ip_target_count[src_ip].add(dst_ip)
+                            if dst_port:
+                                port_scan_count[src_ip][dst_ip].add(dst_port)
 
                         current_time = time.time()
-                        elapsed_time = current_time - begin
-                        if (packet_count > max_capture_packets) or (elapsed_time > max_capture_duration):
-                            end = time.time()
+                        elapsed_time = int(current_time - start_time)
+                        if elapsed_time % MONITOR_INTERVAL == 0:
+                            alerts = detect_anomalies(elapsed_time)
+                            if alerts:
+                                st.error("Shutting down for security reaons.")
+                                stop_event.set()
+                                st.session_state.running = False   
+                                break
+
+                        if (nb_packets > max_capture_packets) or (elapsed_time > max_capture_duration):
                             stop_event.set()
-                            st.session_state.running = False     
+                            st.session_state.running = False   
 
                     
+                    
             if stop_event.is_set():
-                capture_thread.join()
+                capture.close()
+                ip_packet_count.clear()
+                ip_target_count.clear()
+                port_scan_count.clear()
                 st.header("Sum up:")
-                elapsed_time = int(end - begin)
+                end_time = time.time()
+                elapsed_time = int(end_time - start_time)
                 if elapsed_time < 60:
-                    st.write(f"In {elapsed_time} seconds, {packet_count} packets were caught on the {interface} interface among which {anomaly_count} packets were classified as anomalies.")
+                    st.write(f"In {elapsed_time} seconds, {nb_packets} packets were caught on the {interface} interface.")
                 elif elapsed_time < 3600:
                     minutes = elapsed_time // 60
                     seconds = elapsed_time % 60
-                    st.write(f"In {minutes} minutes and {seconds} seconds, {packet_count} packets were caught on the {interface} interface among which {anomaly_count} packets were classified as anomalies.")
+                    st.write(f"In {minutes} minutes and {seconds} seconds, {nb_packets} packets were caught on the {interface} interface.")
                 else:
                     hours = elapsed_time // 3600
                     minutes = (elapsed_time % 3600) // 60
                     seconds = elapsed_time % 60
-                    st.write(f"In {hours} hours, {minutes} minutes, and {seconds} seconds, {packet_count} packets were caught on the {interface} interface among which {anomaly_count} packets were classified as anomalies.")
-            
-                if len(anomalies_df) != 0:
-                    st.write("Here is a summary table of the abnormal packets detected in the network:")
-                    st.dataframe(anomalies_df, width=700, height=300)
-
-                    feature = st.radio("Select feature for anomaly detection:", ["src_mac", "src_ip"], index=0)
-                    if feature:
-                        frequencies = anomalies_df[feature].value_counts().reset_index()
-                        frequencies.columns = [feature, 'frequency']
-
-                        fig = px.bar(
-                            frequencies, 
-                            x=feature, 
-                            y='frequency', 
-                            title="Fréquences d'apparition des adresses IP source dans les anomalies",
-                            labels={feature: f"Source {feature.split('_')[-1].upper()} address", 'frequency': 'Frequency'},
-                            color='frequency',
-                            color_continuous_scale='viridis'
-                        )
-
-                        fig.update_layout(
-                            xaxis_title=f"Source {feature.split('_')[-1].upper()} address",
-                            yaxis_title="Frequency",
-                            xaxis=dict(tickangle=-45),
-                            template="plotly_white"
-                        )
-
-                        st.plotly_chart(fig, use_container_width=True)
-                else:
-                    st.success("No anomalies detceted on the network! 🥳")
+                    st.write(f"In {hours} hours, {minutes} minutes, and {seconds} seconds, {nb_packets} packets were caught on the {interface} interface.")
 
 
 
         elif real_time_capture == "No":
             perform_capture = st.selectbox("A network capture is already provided. Should a new network capture be made?", ["", "Yes, make a new capture", "No, use the given one"])
+            capture_file = 'capture/output.pcap'
             if (perform_capture == "Yes, make a new capture") and ('capture_done' not in st.session_state):
-                interface = st.radio("Choose a network interface:", ["wlp1s0", "eth0", "lo", "tun0", "custom"], index=2)
+                interface = st.radio("Choose a network interface:", ["wlp1s0", "eth0", "lo", "custom"], index=2)
                 with st.expander("To see all the interfaces available on a machine: (click to expand)"):
                     st.markdown("""
                                 
@@ -346,11 +288,26 @@ def main():
                 capture_duration = st.slider("Choose a listening duration", min_value=0, max_value=120, value=0, step=5)
 
                 
+                if (os.path.exists(capture_file)) & (perform_capture == "Yes, make a new capture"):
+                    os.remove(capture_file)
                 if capture_duration > 0:
                     st.success(f"Capture duration set to {capture_duration} seconds with interface {interface}.")
                     with st.spinner('Capture in progress...'):
                         check_permissions()
-                        capture_traffic(interface, capture_file, capture_duration)
+                        command = ["tcpdump", "-i", interface, "-w", capture_file]
+                        start_time = time.time()
+                        process = subprocess.Popen(command)
+                        try:
+                            while (time.time() - start_time) < capture_duration:
+                                time.sleep(1)
+                            process.terminate() 
+                            process.wait()
+
+                        except KeyboardInterrupt:
+                            print("Capture interrupted by user. Stopping tcpdump...")
+                            process.terminate()
+                            process.wait()
+
                         st.session_state.capture_done = True
                     st.success(f"Capture complete!")
                 else:
@@ -360,14 +317,26 @@ def main():
             elif (perform_capture == "No, use the given one") and ('capture_done' not in st.session_state):
                 st.session_state.capture_done = True
 
+            process_done = st.session_state.get('process_done', False)
 
-            if 'capture_done' in st.session_state:
-                data = preprocessing(capture_file, encoders_file)
-                nb_packets = len(data)
-                a, _, _ = st.columns(3)
-                a.metric(label="Packets captured", value=nb_packets, border=True)
-                st.header("Detecting network anomalies")
-                
+            if not process_done:
+                if 'capture_done' in st.session_state:
+                    command = ["tshark", "-r", capture_file]
+                    result = subprocess.run(command, stdout=subprocess.PIPE, text=True)
+                    packet_count = len(result.stdout.splitlines())
+                    _, a, _ = st.columns(3)
+                    a.metric(label="Packets captured", value=packet_count, border=True)
+
+                    st.header("Detecting network anomalies")
+                    df = process_pcap(capture_file)
+                    df.to_csv("capture/out.csv", index=None)
+                    data = preprocessing('capture/out.csv', encoders_file)
+
+                    st.session_state['process_done'] = True
+                    st.session_state['data'] = data
+
+            if 'data' in st.session_state:
+                data = st.session_state['data'].copy()
                 feature = st.radio("Select feature for anomaly detection:", ["flag", "count", "src_bytes", "dst_bytes"], index=0)
                 if feature:
                     find_anomalies(data, model_file, feature=feature)
@@ -375,5 +344,13 @@ def main():
 
 
 
+
 if __name__ == "__main__":
     main()
+
+
+# TODO: clean stop:
+# except KeyboardInterrupt:
+#         print("\nCtrl+C detected. Exiting gracefully...")
+#         cleanup()  
+#         sys.exit(0)
