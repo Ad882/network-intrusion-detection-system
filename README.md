@@ -32,7 +32,6 @@ phishing-simulator/
 │
 ├── analysis.py             # Anomaly analysis related file
 ├── capture.py              # PyShark capture related file
-├── main.py                 # Main CLI application (out-dated, use streamlit_app)
 ├── model.py                # ML model related file 
 ├── .gitignore              # Git ignore file
 ├── README.md               # Project documentation (this file)
