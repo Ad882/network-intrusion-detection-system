@@ -178,7 +178,10 @@ To handle the project, just **start the streamlit application**:
    streamlit run streamlit_app.py
    ```
 
-Then navigate between all the possible choices and enjoy!
+Then navigate between all the possible choices and enjoy!  
+
+*Note: Live capture does not include packet analysis using ML. Instead, it stops when suspicious activity is detected and alerts the user, functioning like a basic IDS.*     
+*"Non-live" capture, on the other hand, collects all packets and only stops after a user-specified duration. This allows for subsequent packet analysis using the ML model to detect network anomalies.*
 
 
 <br>
