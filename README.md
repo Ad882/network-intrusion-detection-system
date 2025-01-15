@@ -31,7 +31,6 @@ phishing-simulator/
 │   └── ...                 # dataset files
 │
 ├── analysis.py             # Anomaly analysis related file
-├── capture.py              # PyShark capture related file
 ├── model.py                # ML model related file 
 ├── .gitignore              # Git ignore file
 ├── README.md               # Project documentation (this file)
