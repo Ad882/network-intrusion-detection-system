@@ -217,7 +217,7 @@ def main():
                         if elapsed_time % MONITOR_INTERVAL == 0:
                             alerts = detect_anomalies(elapsed_time)
                             if alerts:
-                                st.error("Shutting down for security reaons.")
+                                st.error("🚨 Attack detected! 🚨")
                                 stop_event.set()
                                 st.session_state.running = False   
                                 break
@@ -337,7 +337,7 @@ def main():
 
             if 'data' in st.session_state:
                 data = st.session_state['data'].copy()
-                feature = st.radio("Select feature for anomaly detection:", ["flag", "count", "src_bytes", "dst_bytes"], index=0)
+                feature = st.radio("Select feature for anomaly detection:", ["src_bytes vs. dst_bytes", "duration", "count", "dst_host_count", "src_ip vs. dst_port", "dst_host_count vs. dst_host_srv_count"], index=0)
                 if feature:
                     find_anomalies(data, model_file, feature=feature)
 
