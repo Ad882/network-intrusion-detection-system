@@ -10,6 +10,7 @@ import socket
 import pandas as pd
 from collections import defaultdict
 
+
 PROTOCOL_MAP = {
     1: "ICMP",
     6: "TCP",
@@ -22,6 +23,24 @@ PROTOCOL_MAP = {
     89: "OSPF",
     132: "SCTP",
 }
+
+
+def analyze_packet(packet):
+    try:
+        eth = dpkt.ethernet.Ethernet(packet)
+        if not isinstance(eth.data, dpkt.ip.IP):
+            return None, None, None
+        ip = eth.data
+        src_ip = socket.inet_ntoa(ip.src)
+        dst_ip = socket.inet_ntoa(ip.dst)
+        if isinstance(ip.data, (dpkt.tcp.TCP, dpkt.udp.UDP)):
+            transport = ip.data
+            dst_port = transport.dport
+            return src_ip, dst_ip, dst_port
+        return src_ip, dst_ip, None
+    except Exception:
+        return None, None, None
+
 
 def process_pcap(file_path):
     data = []

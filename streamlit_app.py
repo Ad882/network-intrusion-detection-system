@@ -1,77 +1,17 @@
 import streamlit as st
 from model import train_model, evaluate_model, save_model 
-from utils import check_permissions
-from analysis import process_pcap, preprocessing, find_anomalies
+from utils import MONITOR_INTERVAL, ip_packet_count, ip_target_count, port_scan_count, check_permissions, load_lottieurl, detect_anomalies
+from analysis import analyze_packet, process_pcap, preprocessing, find_anomalies
 from streamlit_lottie import st_lottie
-import requests
 import time
 import pyshark
 import threading
 import subprocess
 import os
-import dpkt
-import socket
-from collections import defaultdict
 
-
-THRESHOLD_PACKETS = 100
-THRESHOLD_PORTS = 50
-MONITOR_INTERVAL = 5
-
-ip_packet_count = defaultdict(int)
-ip_target_count = defaultdict(set)
-port_scan_count = defaultdict(lambda: defaultdict(set))
 
 lock = threading.Lock()
 stop_event = threading.Event()
-
-
-def load_lottieurl(url):
-    r = requests.get(url)
-    if r.status_code != 200:
-        return None
-    return r.json()
-
-
-def analyze_packet(packet):
-    try:
-        eth = dpkt.ethernet.Ethernet(packet)
-        if not isinstance(eth.data, dpkt.ip.IP):
-            return None, None, None
-        ip = eth.data
-        src_ip = socket.inet_ntoa(ip.src)
-        dst_ip = socket.inet_ntoa(ip.dst)
-        if isinstance(ip.data, (dpkt.tcp.TCP, dpkt.udp.UDP)):
-            transport = ip.data
-            dst_port = transport.dport
-            return src_ip, dst_ip, dst_port
-        return src_ip, dst_ip, None
-    except Exception:
-        return None, None, None
-
-
-
-def detect_anomalies(elapsed_time):
-    alerts = []
-    detected_ips = set()
-
-    for ip, count in ip_packet_count.items():
-        for dst_ip, ports in port_scan_count[ip].items():
-            if len(ports) > THRESHOLD_PORTS:
-                alert = f"ALERT: Possible port scan detected from {ip} targeting {dst_ip} with {len(ports)} ports scanned in {elapsed_time} seconds."
-                st.error(alert)
-                alerts.append(alert)
-                detected_ips.add(ip)
-                return alerts 
-            
-        if count > THRESHOLD_PACKETS and ip not in detected_ips:
-            alert = f"ALERT: Possible DDoS detected from {ip} with {count} packets in {elapsed_time} seconds."
-            st.error(alert)
-            alerts.append(alert)
-            return alerts  
-
-    return alerts
-
 
 
 #                    #

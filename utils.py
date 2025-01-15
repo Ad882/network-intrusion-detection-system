@@ -5,9 +5,41 @@ import sys
 import pwd
 from collections import deque
 import streamlit as st
-from utils import is_streamlit
+import requests
+from collections import defaultdict
+
 
 connections = deque(maxlen=1000)
+
+THRESHOLD_PACKETS = 100
+THRESHOLD_PORTS = 50
+MONITOR_INTERVAL = 5
+
+ip_packet_count = defaultdict(int)
+ip_target_count = defaultdict(set)
+port_scan_count = defaultdict(lambda: defaultdict(set))
+
+
+def detect_anomalies(elapsed_time):
+    alerts = []
+    detected_ips = set()
+
+    for ip, count in ip_packet_count.items():
+        for dst_ip, ports in port_scan_count[ip].items():
+            if len(ports) > THRESHOLD_PORTS:
+                alert = f"ALERT: Possible port scan detected from {ip} targeting {dst_ip} with {len(ports)} ports scanned in {elapsed_time} seconds."
+                st.error(alert)
+                alerts.append(alert)
+                detected_ips.add(ip)
+                return alerts 
+            
+        if count > THRESHOLD_PACKETS and ip not in detected_ips:
+            alert = f"ALERT: Possible DDoS detected from {ip} with {count} packets in {elapsed_time} seconds."
+            st.error(alert)
+            alerts.append(alert)
+            return alerts  
+
+    return alerts
 
 
 def is_streamlit():
@@ -38,3 +70,10 @@ def check_permissions():
         else:
             print(f"Error checking permissions: {e}")
         sys.exit(1)
+
+
+def load_lottieurl(url):
+    r = requests.get(url)
+    if r.status_code != 200:
+        return None
+    return r.json()
