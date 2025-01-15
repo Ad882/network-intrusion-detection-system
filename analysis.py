@@ -71,7 +71,7 @@ def process_pcap(file_path):
             srv_rerror_rate = rerror_counts[(src_ip, dst_port)] / srv_counts[dst_port] if srv_counts[dst_port] > 0 else 0
 
             data.append({
-                'duration': timestamps[src_ip][-1] - timestamps[src_ip][0] if len(timestamps[src_ip]) > 1 else 0,
+                'duration': timestamps[src_ip][-1] - timestamps[src_ip][-2] if len(timestamps[src_ip]) > 2 else 0,
                 'protocol_type': protocol_name,
                 'service': dst_port,
                 'flag': 'SF' if tcp_flags and (tcp_flags & dpkt.tcp.TH_SYN and tcp_flags & dpkt.tcp.TH_ACK) else 'OTH',
@@ -80,9 +80,6 @@ def process_pcap(file_path):
                 'land': 1 if src_ip == dst_ip and src_port == dst_port else 0,
                 'wrong_fragment': 0,
                 'urgent': 0,
-                #'timestamp': timestamp,
-                #'src_ip': src_ip,
-                #'dst_ip': dst_ip,
                 'count': packet_counts[(src_ip, dst_ip)],
                 'srv_count': srv_counts[dst_port],
                 'serror_rate': serror_rate,
@@ -102,6 +99,7 @@ def process_pcap(file_path):
                 'dst_host_srv_serror_rate': srv_serror_rate,
                 'dst_host_rerror_rate': rerror_rate,
                 'dst_host_srv_rerror_rate': srv_rerror_rate,
+                'src_ip': src_ip,
             })
     
     df = pd.DataFrame(data)
@@ -114,6 +112,8 @@ def preprocessing(capture_file, encoders_file):
         encoders = pickle.load(f)
 
     data = pd.read_csv(capture_file)
+    temp_series = pd.Series(data['src_ip'])
+    data.drop(columns=['src_ip'], inplace=True)
 
     categorical_columns = ['protocol_type', 'service', 'flag']
     for col in categorical_columns:
@@ -132,50 +132,205 @@ def preprocessing(capture_file, encoders_file):
 
             data[col] = encoders[col].fit_transform(data[col])
 
+    data['src_ip'] = temp_series
     return data
 
 
-def find_anomalies(data, model_file, feature):
-    with open(model_file, 'rb') as file:
-        model = pickle.load(file)
 
-    data['label'] = model.predict(data)
 
-    anomalies = data[data['label'] == 1]
-    detected_anomalies = len(anomalies)
-    non_anomalies = len(data) - len(anomalies)
+def plot_src_bytes_vs_dst_bytes(data, anomalies):
+    x_data = 'src_bytes'
+    y_data = 'dst_bytes'
 
     fig = go.Figure()
-
     fig.add_trace(go.Scatter(
-        x=data.index,
-        y=data[feature],
+        x=data[x_data],
+        y=data[y_data],
         mode='markers',
         marker=dict(color='blue', size=6, opacity=0.6),
         name='Normal'
     ))
-
     fig.add_trace(go.Scatter(
-        x=anomalies.index,
-        y=anomalies[feature],
+        x=anomalies[x_data],
+        y=anomalies[y_data],
         mode='markers',
         marker=dict(color='red', size=8, line=dict(width=1, color='black')),
         name='anomalies'
     ))
-
     fig.update_layout(
-        title=f'Visualization of Detected anomalies ({feature})',
-        xaxis_title='Index',
-        yaxis_title=feature,
+        title=f'Visualization of Detected anomalies ({x_data} vs {y_data})',
+        xaxis_title=f'{x_data}',
+        yaxis_title=f'{y_data}',
         legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
         template='plotly_white'
     )
 
     if is_streamlit():
         st.plotly_chart(fig)
+    else:
+        fig.show()
+
+
+def plot_duration(data, anomalies):
+    y_data = 'duration'
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=data.index,
+        y=data[y_data],
+        mode='markers',
+        marker=dict(color='blue', size=6, opacity=0.6),
+        name='Normal'
+    ))
+    fig.add_trace(go.Scatter(
+        x=anomalies.index,
+        y=anomalies[y_data],
+        mode='markers',
+        marker=dict(color='red', size=8, line=dict(width=1, color='black')),
+        name='anomalies'
+    ))
+    fig.update_layout(
+        title=f'Visualization of Detected anomalies (packet duration)',
+        xaxis_title='Index',
+        yaxis_title='packet duration',
+        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
+        template='plotly_white'
+    )
+
+    if is_streamlit():
+        st.plotly_chart(fig)
+    else:
+        fig.show()
+
+
+def plot_count(data):
+    count_by_src_ip = data.loc[:, ['protocol_type', 'src_ip']].groupby(["src_ip"]).count()
+    fig = px.histogram(count_by_src_ip, x=count_by_src_ip.index, y="protocol_type")
+    fig.update_layout(
+        title="Histogram of packets sent by source ip",
+        xaxis_title="source IP",
+        yaxis_title="Number of packets sent")
+    
+    if is_streamlit():
+        st.plotly_chart(fig)
+    else:
+        fig.show()
+
+
+def plot_dst_host_count(data):
+    fig = px.histogram(data, x="dst_host_count", title="Histogram of dst_host_count")
+    
+    if is_streamlit():
+        st.plotly_chart(fig)
+    else:
+        fig.show()
+
+
+def plot_src_ip_vs_dst_port(data, anomalies):
+    x_data = 'src_ip'
+    y_data = 'service'
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=data[x_data],
+        y=data[y_data],
+        mode='markers',
+        marker=dict(color='blue', size=6, opacity=0.6),
+        name='Normal'
+    ))
+    fig.add_trace(go.Scatter(
+        x=anomalies[x_data],
+        y=anomalies[y_data],
+        mode='markers',
+        marker=dict(color='red', size=8, line=dict(width=1, color='black')),
+        name='anomalies'
+    ))
+    fig.update_layout(
+        title=f'Visualization of Detected anomalies ({x_data} vs {y_data})',
+        xaxis_title=f'{x_data}',
+        yaxis_title=f'{y_data}',
+        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
+        template='plotly_white'
+    )
+
+    if is_streamlit():
+        st.plotly_chart(fig)
+    else:
+        fig.show()
+
+
+def plot_dst_host_count_vs_dst_host_srv_count(data, anomalies):
+    x_data = 'dst_host_count'
+    y_data = 'dst_host_srv_count'
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=data[x_data],
+        y=data[y_data],
+        mode='markers',
+        marker=dict(color='blue', size=6, opacity=0.6),
+        name='Normal'
+    ))
+    fig.add_trace(go.Scatter(
+        x=anomalies[x_data],
+        y=anomalies[y_data],
+        mode='markers',
+        marker=dict(color='red', size=8, line=dict(width=1, color='black')),
+        name='anomalies'
+    ))
+    fig.update_layout(
+        title=f'Visualization of Detected anomalies ({x_data} vs {y_data})',
+        xaxis_title=f'{x_data}',
+        yaxis_title=f'{y_data}',
+        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
+        template='plotly_white'
+    )
+
+    if is_streamlit():
+        st.plotly_chart(fig)
+    else:
+        fig.show()
+
+
+
+def find_anomalies(data, model_file, feature):
+    with open(model_file, 'rb') as file:
+        model = pickle.load(file)
+
+    temp_series = pd.Series(data['src_ip'])
+    data.drop(columns=['src_ip'], inplace=True)
+    data['label'] = model.predict(data)
+    data['src_ip'] = temp_series
+
+    anomalies = data[data['label'] == 1]
+    detected_anomalies = len(anomalies)
+    non_anomalies = len(data) - len(anomalies)
+
+    match feature:
+        case "src_bytes vs. dst_bytes":
+            plot_src_bytes_vs_dst_bytes(data, anomalies)
+
+        case "duration":
+            plot_duration(data, anomalies)
+
+        case "count":
+            plot_count(data)
+
+        case "dst_host_count":
+            plot_dst_host_count(data)
+
+        case "src_ip vs. dst_port":
+            plot_src_ip_vs_dst_port(data, anomalies)
+
+        case "dst_host_count vs. dst_host_srv_count":
+            plot_dst_host_count_vs_dst_host_srv_count(data, anomalies)
+
+        case _:
+            print(f"Unknown feature: {feature}")
+
+    if is_streamlit():
         st.write(f"Number of detected anomalies: {detected_anomalies}")
         st.write(f"Number of detected non anomalies: {non_anomalies}")
     else:
         print(f"Number of detected anomalies: {detected_anomalies}")
         print(f"Number of detected non anomalies: {non_anomalies}")
-        fig.show()
