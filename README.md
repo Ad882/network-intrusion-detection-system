@@ -1,6 +1,6 @@
 <h1 align='center'> Network Intrusion Detection System (NIDS) 🔒🚨 </h1>
 
-A project designed to monitor, detect, and analyze malicious activities within a network. The system uses machine learning models to classify network traffic.
+A project designed to monitor, detect, and analyze malicious activities within a network with a very user-friendly interface. The system uses also machine learning models to classify network traffic.
 
 
 <br>
