@@ -1,16 +1,12 @@
 import streamlit as st
 from model import train_model, evaluate_model, save_model 
-from capture import check_permissions
+from utils import check_permissions
 from analysis import process_pcap, preprocessing, find_anomalies
 from streamlit_lottie import st_lottie
 import requests
 import time
 import pyshark
 import threading
-import pickle
-import pandas as pd
-import numpy as np
-import plotly.express as px
 import subprocess
 import os
 import dpkt

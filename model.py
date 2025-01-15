@@ -1,8 +1,8 @@
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, f1_score, classification_report
-from sklearn.metrics import roc_auc_score, roc_curve
+from sklearn.metrics import accuracy_score, f1_score
+from sklearn.metrics import roc_curve
 import plotly.graph_objects as go
 import pickle
 import streamlit as st
