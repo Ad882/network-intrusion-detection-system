@@ -17,27 +17,29 @@ Here's the current structure of the project:
 
 ```
 phishing-simulator/
-├── capture/                # Contains the captured network traffic
-│   └── nw_traffic.csv      # Example of a intercepted network traffic
+├── capture/                  # Contains the captured network traffic
+│   ├── network_traffic.csv   # Processed network traffic stored in csv
+│   └── network_traffic.pcap  # Intercepted network traffic stored in pcap
 │
-├── encoders/               # Contains the model encoders 
-│   └── label_encoders.pkl  # Model encoders pickle file
+├── encoders/                 # Contains the model encoders 
+│   └── label_encoders.pkl    # Model encoders pickle file
 │
-├── models/                 # Contains the model 
-│   └── nsl-kdd_model.pkl   # Model pickle file
+├── models/                   # Contains the model 
+│   └── nsl-kdd_model.pkl     # Model pickle file
 │
-├── nsl-kdd/                # NSL-KDD dataset
-│   ├── ...                 # dataset files
-│   └── ...                 # dataset files
+├── nsl-kdd/                  # NSL-KDD dataset
+│   ├── ...                   # dataset files
+│   └── ...                   # dataset files
 │
-├── analysis.py             # Anomaly analysis related file
-├── model.py                # ML model related file 
-├── .gitignore              # Git ignore file
-├── README.md               # Project documentation (this file)
-├── requirements.txt        # Python dependencies
-├── streamlit_app.py        # Streamlit application
-├── topology.py             # Mininet network topologies
-└── utils.py                # Utils functions
+├── .gitignore                # Git ignore file
+├── LICENSE                   # Project license
+├── README.md                 # Project documentation (this file)
+├── analysis.py               # Anomaly analysis related file
+├── model.py                  # ML model related file 
+├── requirements.txt          # Python dependencies
+├── streamlit_app.py          # Streamlit application
+├── topology.py               # Mininet network topologies
+└── utils.py                  # Utils functions
 ```
 
 
