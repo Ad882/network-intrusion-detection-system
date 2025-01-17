@@ -175,9 +175,11 @@ def main():
 
                         # End the capture after a certain time / number of packets captured has been reached if no anomaly detected:
                         if (nb_packets > max_capture_packets) or (elapsed_time > max_capture_duration):
+                            st.info("Ending the capture...")
                             stop_event.set()
                             st.session_state.running = False   
                             st.session_state.natural_stop = True 
+                            break
 
                     
             # When live capture stops: 
@@ -185,7 +187,7 @@ def main():
 
                 # Stop the PyShark capture:
                 capture.close()
-
+                
                 # Reset all variables:
                 ip_packet_count.clear()
                 ip_target_count.clear()
