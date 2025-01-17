@@ -13,21 +13,21 @@ from typing import Optional
 connections = deque(maxlen=1000)
 
 # Abnormal traffic threshold:
-THRESHOLD_PACKETS = 100
-THRESHOLD_PORTS = 50
-MONITOR_INTERVAL = 5
+THRESHOLD_PACKETS = 1000
+THRESHOLD_PORTS = 500
+MONITOR_INTERVAL = 1
 
 ip_packet_count = defaultdict(int)
 ip_target_count = defaultdict(set)
 port_scan_count = defaultdict(lambda: defaultdict(set))
 
 
-def detect_anomalies(elapsed_time: float) -> list:
+def detect_anomalies() -> list:
     """
     Fonction: detect_anomalies
 
     Input:
-        - elapsed_time: float, Elapsed time between packets.
+        - None.
     
     Output:
         - alerts: list, Suspected alerts.
@@ -43,14 +43,14 @@ def detect_anomalies(elapsed_time: float) -> list:
     for ip, count in ip_packet_count.items():
         for dst_ip, ports in port_scan_count[ip].items():
             if len(ports) > THRESHOLD_PORTS:
-                alert = f"ALERT: Possible port scan detected from {ip} targeting {dst_ip} with {len(ports)} ports scanned in {elapsed_time} seconds."
+                alert = f"ALERT: Possible port scan detected from {ip} targeting {dst_ip} with {len(ports)} ports scanned in {MONITOR_INTERVAL} seconds."
                 st.error(alert)
                 alerts.append(alert)
                 detected_ips.add(ip)
                 return alerts 
             
         if count > THRESHOLD_PACKETS and ip not in detected_ips:
-            alert = f"ALERT: Possible DDoS detected from {ip} with {count} packets in {elapsed_time} seconds."
+            alert = f"ALERT: Possible DDoS detected from {ip} with {count} packets in {MONITOR_INTERVAL} seconds."
             st.error(alert)
             alerts.append(alert)
             return alerts  

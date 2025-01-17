@@ -162,10 +162,9 @@ def main():
                                 port_scan_count[src_ip][dst_ip].add(dst_port)
 
                         # Determine whether or not the packets received are suspicious:
-                        current_time = time.time()
-                        elapsed_time = int(current_time - start_time)
+                        elapsed_time = int(elapsed_time)
                         if elapsed_time % MONITOR_INTERVAL == 0:
-                            alerts = detect_anomalies(elapsed_time)
+                            alerts = detect_anomalies()
                             if alerts:
                                 st.error("🚨 Attack detected! 🚨")
                                 stop_event.set()
@@ -187,7 +186,7 @@ def main():
 
                 # Stop the PyShark capture:
                 capture.close()
-                
+
                 # Reset all variables:
                 ip_packet_count.clear()
                 ip_target_count.clear()
