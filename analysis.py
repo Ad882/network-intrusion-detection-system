@@ -103,40 +103,51 @@ def process_pcap(file_path: str) -> pd.DataFrame:
     srv_counts = defaultdict(int)     
     serror_counts = defaultdict(int)  
     rerror_counts = defaultdict(int)  
-    timestamps = defaultdict(list) 
+    timestamps = defaultdict(lambda: defaultdict(list))
+
+    previous_timestamp = None
 
     with open(file_path, 'rb') as f:
         pcap = dpkt.pcap.Reader(f)
         for timestamp, buf in pcap:
-            eth = dpkt.ethernet.Ethernet(buf)
-            
-            if not isinstance(eth.data, dpkt.ip.IP):
+            try:
+                eth = dpkt.ethernet.Ethernet(buf)
+                if not isinstance(eth.data, dpkt.ip.IP):
+                    continue
+
+                ip = eth.data
+                src_ip = socket.inet_ntoa(ip.src)
+                dst_ip = socket.inet_ntoa(ip.dst)
+                protocol = ip.p
+                protocol_name = PROTOCOL_MAP.get(protocol, f"UNKNOWN ({protocol})")
+                transport = ip.data
+
+                src_port = getattr(transport, 'sport', None)
+                dst_port = getattr(transport, 'dport', None)
+                tcp_flags = getattr(transport, 'flags', None) if protocol == 6 else None
+
+                packet_counts[(src_ip, dst_port)] += 1
+                if dst_port:
+                    srv_counts[dst_port] += 1
+
+                if previous_timestamp is not None:
+                    time_delta = timestamp - previous_timestamp
+                else:
+                    time_delta = 0
+                previous_timestamp = timestamp
+
+                src_bytes = len(buf) if hasattr(ip, 'data') else 0
+                dst_bytes = src_bytes
+
+                if protocol == 6 and tcp_flags & dpkt.tcp.TH_SYN and tcp_flags & dpkt.tcp.TH_RST:
+                    serror_counts[(src_ip, dst_port)] += 1
+                if protocol == 1:
+                    rerror_counts[(src_ip, dst_port)] += 1
+
+            except Exception as e:
+                print(f"Error processing packet: {e}")
                 continue
-            ip = eth.data
             
-            src_ip = socket.inet_ntoa(ip.src)
-            dst_ip = socket.inet_ntoa(ip.dst)
-            length = ip.len
-            protocol = ip.p
-            protocol_name = PROTOCOL_MAP.get(protocol, f"UNKNOWN ({protocol})")
-            length = ip.len
-            src_ip = socket.inet_ntoa(ip.src)
-            dst_ip = socket.inet_ntoa(ip.dst)
-            transport = ip.data
-            src_port = transport.sport if ((protocol == 6) | (protocol == 17)) else None
-            dst_port = transport.dport if ((protocol == 6) | (protocol == 17)) else None
-            tcp_flags = transport.flags if protocol == 6 else None
-
-            packet_counts[(src_ip, dst_ip)] += 1
-            srv_counts[dst_port] += 1
-            timestamps[src_ip].append(timestamp)
-
-            if protocol == 6 and tcp_flags & dpkt.tcp.TH_SYN and tcp_flags & dpkt.tcp.TH_RST:
-                serror_counts[(src_ip, dst_port)] += 1
-
-            if protocol == 1:
-                rerror_counts[(src_ip, dst_port)] += 1
-
             same_srv_rate = srv_counts[dst_port] / packet_counts[(src_ip, dst_ip)] if packet_counts[(src_ip, dst_ip)] > 0 else 0
             diff_srv_rate = (packet_counts[(src_ip, dst_ip)] - srv_counts[dst_port]) / packet_counts[(src_ip, dst_ip)] if packet_counts[(src_ip, dst_ip)] > 0 else 0
             serror_rate = serror_counts[(src_ip, dst_port)] / packet_counts[(src_ip, dst_ip)] if packet_counts[(src_ip, dst_ip)] > 0 else 0
@@ -145,12 +156,12 @@ def process_pcap(file_path: str) -> pd.DataFrame:
             srv_rerror_rate = rerror_counts[(src_ip, dst_port)] / srv_counts[dst_port] if srv_counts[dst_port] > 0 else 0
 
             data.append({
-                'duration': timestamps[src_ip][-1] - timestamps[src_ip][-2] if len(timestamps[src_ip]) > 2 else 0,
+                'duration': time_delta,
                 'protocol_type': protocol_name,
                 'service': dst_port,
                 'flag': 'SF' if tcp_flags and (tcp_flags & dpkt.tcp.TH_SYN and tcp_flags & dpkt.tcp.TH_ACK) else 'OTH',
-                'src_bytes': length if src_port else 0,
-                'dst_bytes': length if dst_port else 0,
+                'src_bytes': src_bytes,
+                'dst_bytes': dst_bytes,
                 'land': 1 if src_ip == dst_ip and src_port == dst_port else 0,
                 'wrong_fragment': 0,
                 'urgent': 0,
