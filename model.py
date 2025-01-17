@@ -7,13 +7,29 @@ import plotly.graph_objects as go
 import pickle
 import streamlit as st
 from utils import is_streamlit
+import numpy as np
+from typing import Tuple
 
 
-def train_model():
+def train_model() -> Tuple[pd.DataFrame, pd.Series, np.ndarray, RandomForestClassifier]:
+    """
+    Function: train_model
+
+    Input:
+        - None
+
+    Output:
+        - X_test: pd.DataFrame, Features of the test dataset.
+        - y_test: pd.Series, True labels of the test dataset.
+        - y_pred: np.ndarray, Predicted labels for the test dataset.
+        - model: RandomForestClassifier, Trained model used for prediction.
+
+    Description:
+        Trains and test the NSL-KDD dataset with a RandomForestClassifier.
+    """
     # PRE-PROCESSING
     train_data = pd.read_csv('nsl-kdd/KDDTrain+.txt', header=None)
     test_data = pd.read_csv('nsl-kdd/KDDTest+.txt', header=None)
-
 
 
     column_names = [
@@ -57,8 +73,6 @@ def train_model():
     test_data = test_data.drop(columns=columns_to_drop, axis=1)
 
 
-
-
     # TRAINING
     print("Training...")
     X_train, X_test = train_data.drop(columns=['label'], axis=1), test_data.drop(columns=['label'], axis=1)
@@ -74,7 +88,32 @@ def train_model():
     return X_test, y_test, y_pred, model
 
 
-def evaluate_model(X_test, y_test, y_pred, model):
+def evaluate_model(X_test: pd.DataFrame, y_test: pd.Series, y_pred: np.ndarray, model: RandomForestClassifier):
+    """
+    Function: evaluate_model
+
+    Input:
+        - X_test: pd.DataFrame, Features of the test dataset.
+        - y_test: pd.Series, True labels of the test dataset.
+        - y_pred: np.ndarray, Predicted labels for the test dataset.
+        - model: RandomForestClassifier, Trained model used for prediction.
+
+    Output:
+        - None
+
+    Description:
+        Evaluates the performance of a trained model on the test dataset. It computes and displays
+        the accuracy and F1-score of the model's predictions. Additionally, it plots the ROC curve based on the 
+        predicted probabilities of the test data.
+
+        In a Streamlit environment:
+            - Displays the accuracy and F1-score using `st.write()`.
+            - Plots the ROC curve using Plotly, which is displayed with `st.plotly_chart()`.
+
+        In a standard environment:
+            - Prints the accuracy and F1-score to the console.
+            - Plots the ROC curve using Plotly and displays it via `fig.show()`.
+    """
     if is_streamlit():
         st.write("Accuracy:", accuracy_score(y_test, y_pred))
         st.write("F1-score:", f1_score(y_test, y_pred))
@@ -113,6 +152,19 @@ def evaluate_model(X_test, y_test, y_pred, model):
         fig.show()
 
 
-def save_model(model):
+def save_model(model: RandomForestClassifier):
+    """
+    Function: save_model
+
+    Input:
+        - model: RandomForestClassifier, The trained model to be saved.
+
+    Output:
+        - None
+
+    Description:
+        Saves a trained machine learning model to disk using the `pickle` library. The model is
+        serialized and stored in a file named 'nsl-kdd_model.pkl' in the 'models' directory.
+    """
     with open('models/nsl-kdd_model.pkl', 'wb') as file:
         pickle.dump(model, file)

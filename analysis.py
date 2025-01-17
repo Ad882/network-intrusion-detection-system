@@ -9,6 +9,7 @@ import dpkt
 import socket
 import pandas as pd
 from collections import defaultdict
+from typing import Tuple, Optional
 
 
 PROTOCOL_MAP = {
@@ -25,7 +26,24 @@ PROTOCOL_MAP = {
 }
 
 
-def analyze_packet(packet):
+def analyze_packet(packet: bytes) -> Tuple[Optional[str], Optional[str], Optional[int]]:
+    """
+    Function: analyze_packet
+
+    Input:
+        - packet: bytes, binary data sequence representing the raw Ethernet packet.
+    
+    Output:
+        - src_ip: Optional[str], Packet's source IP address (str) or None if the analysis fails.
+        - dst_ip: Optional[str], Packet's destination IP address (str) or None if the analysis fails.
+        - dst_port: Optional[int], Packet's destination port (int) or None if the analysis fails or if no port is found.
+
+    Description:
+        Extracts useful information from the packet, such as the source IP (src_ip), 
+        destination IP (dst_ip), and destination port (dst_port). If the packet 
+        cannot be analyzed or the necessary information is not found, it returns None 
+        for the respective fields.
+    """
     try:
         eth = dpkt.ethernet.Ethernet(packet)
         if not isinstance(eth.data, dpkt.ip.IP):
@@ -42,7 +60,44 @@ def analyze_packet(packet):
         return None, None, None
 
 
-def process_pcap(file_path):
+def process_pcap(file_path: str) -> pd.DataFrame:
+    """
+    Function: process_pcap
+
+    Input:
+        - file_path: str, Path to the PCAP file to be processed.
+
+    Output:
+        - pd.DataFrame, A DataFrame containing processed network features derived from the PCAP file.
+
+    Description:
+        Processes a given PCAP file, extracting various network-related features from the captured packets.
+        The function analyzes the Ethernet, IP, and transport layers of the packets, and calculates several statistics 
+        such as packet counts, error rates, and service rates.
+
+        For each packet in the PCAP file:
+            - It extracts the source and destination IP addresses, ports, and protocol information.
+            - It calculates various features, including packet counts, error rates, and service-related rates.
+            - It handles the following error rates:
+                - SYN + RST errors (for TCP)
+                - ICMP errors (for protocol 1)
+            - The function also calculates the rate of services, errors, and other packet statistics.
+
+        The features extracted from each packet are added to a list, which is then converted into a pandas DataFrame.
+        The resulting DataFrame contains the following columns:
+            - `duration`: Duration between the last two packets from the same source IP.
+            - `protocol_type`: The protocol name (e.g., TCP, UDP, ICMP).
+            - `service`: The destination port number.
+            - `flag`: TCP flag type (e.g., SF, OTH).
+            - `src_bytes`: The number of bytes from the source IP.
+            - `dst_bytes`: The number of bytes to the destination IP.
+            - `land`: A binary flag indicating if the packet is a land attack.
+            - `count`: The total number of packets exchanged between the source and destination IP.
+            - Additional features related to error rates, service rates, and other network characteristics.
+
+        This function reads the PCAP file using `dpkt` and processes it packet by packet, storing relevant data 
+        in a pandas DataFrame that can be used for further analysis or machine learning purposes.
+    """
     data = []
     packet_counts = defaultdict(int)  
     srv_counts = defaultdict(int)     
@@ -126,7 +181,24 @@ def process_pcap(file_path):
 
 
 
-def preprocessing(capture_file, encoders_file):
+def preprocessing(capture_file: str, encoders_file: str) -> pd.DataFrame:
+    """
+    Function: preprocessing
+
+    Input:
+        - capture_file: str, Path to the CSV file containing the capture data (network traffic).
+        - encoders_file: str, Path to the pickle file containing encoders for categorical columns.
+
+    Output:
+        - pd.DataFrame, A processed DataFrame where categorical columns are encoded, and the 'src_ip' column 
+          is restored to its original state.
+
+    Description:
+        Performs preprocessing on the network traffic data contained in the provided CSV file.
+        Specifically, it handles the encoding of categorical features using pre-existing encoders stored in a pickle 
+        file. If a new category is encountered in any categorical column, the encoder is updated and saved back 
+        to the pickle file.
+    """
     with open(encoders_file, 'rb') as f:
         encoders = pickle.load(f)
 
@@ -157,7 +229,22 @@ def preprocessing(capture_file, encoders_file):
 
 
 
-def plot_src_bytes_vs_dst_bytes(data, anomalies):
+def plot_src_bytes_vs_dst_bytes(data: pd.DataFrame, anomalies: pd.DataFrame):
+    """
+    Function: plot_src_bytes_vs_dst_bytes
+
+    Input:
+        - data: pd.DataFrame, A DataFrame containing the normal data with columns for 'src_bytes' and 'dst_bytes'.
+        - anomalies: pd.DataFrame, A DataFrame containing the anomalous data with columns for 'src_bytes' and 'dst_bytes'.
+
+    Output:
+        - None, The function visualizes the data in a scatter plot and displays it using Plotly.
+
+    Description:
+        Creates a scatter plot to visualize the relationship between 'src_bytes' and 'dst_bytes' in 
+        network traffic data. It distinguishes normal data points from anomalies by plotting them in different colors 
+        and styles.
+    """
     x_data = 'src_bytes'
     y_data = 'dst_bytes'
 
@@ -190,7 +277,22 @@ def plot_src_bytes_vs_dst_bytes(data, anomalies):
         fig.show()
 
 
-def plot_duration(data, anomalies):
+def plot_duration(data: pd.DataFrame, anomalies: pd.DataFrame):
+    """
+    Function: plot_duration
+
+    Input:
+        - data: pd.DataFrame, A DataFrame containing the normal data with columns for 'duration'.
+        - anomalies: pd.DataFrame, A DataFrame containing the anomalous data with columns for 'duration'.
+
+    Output:
+        - None, The function visualizes the data in a scatter plot and displays it using Plotly.
+
+    Description:
+        Creates a scatter plot to visualize the packets duration in network traffic data. 
+        It distinguishes normal data points from anomalies by plotting them in different colors 
+        and styles.
+    """
     y_data = 'duration'
 
     fig = go.Figure()
@@ -222,7 +324,22 @@ def plot_duration(data, anomalies):
         fig.show()
 
 
-def plot_count(data):
+def plot_count(data: pd.DataFrame):
+    """
+    Function: plot_count
+
+    Input:
+        - data: pd.DataFrame, A DataFrame containing the normal data with columns for 'protocol_type', 'src_ip'.
+        - anomalies: pd.DataFrame, A DataFrame containing the anomalous data with columns for 'protocol_type', 'src_ip'.
+
+    Output:
+        - None, The function visualizes the data in an histogram plot and displays it using Plotly.
+
+    Description:
+        Creates an histogram plot to visualize the number of packets sent by ip in network traffic data. 
+        It distinguishes normal data points from anomalies by plotting them in different colors 
+        and styles.
+    """
     count_by_src_ip = data.loc[:, ['protocol_type', 'src_ip']].groupby(["src_ip"]).count()
     fig = px.histogram(count_by_src_ip, x=count_by_src_ip.index, y="protocol_type")
     fig.update_layout(
@@ -236,7 +353,22 @@ def plot_count(data):
         fig.show()
 
 
-def plot_dst_host_count(data):
+def plot_dst_host_count(data: pd.DataFrame):
+    """
+    Function: plot_dst_host_count
+
+    Input:
+        - data: pd.DataFrame, A DataFrame containing the normal data with columns for 'dst_host_count'.
+        - anomalies: pd.DataFrame, A DataFrame containing the anomalous data with columns for 'dst_host_count'.
+
+    Output:
+        - None, The function visualizes the data in an histogram plot and displays it using Plotly.
+
+    Description:
+        Creates an histogram plot to visualize the packets dst_host_count in network traffic data. 
+        It distinguishes normal data points from anomalies by plotting them in different colors 
+        and styles.
+    """
     fig = px.histogram(data, x="dst_host_count", title="Histogram of dst_host_count")
     
     if is_streamlit():
@@ -245,7 +377,22 @@ def plot_dst_host_count(data):
         fig.show()
 
 
-def plot_src_ip_vs_dst_port(data, anomalies):
+def plot_src_ip_vs_dst_port(data: pd.DataFrame, anomalies: pd.DataFrame):
+    """
+    Function: plot_src_ip_vs_dst_port
+
+    Input:
+        - data: pd.DataFrame, A DataFrame containing the normal data with columns for 'src_ip' and 'service'.
+        - anomalies: pd.DataFrame, A DataFrame containing the anomalous data with columns for 'src_ip' and 'service'.
+
+    Output:
+        - None, The function visualizes the data in a scatter plot and displays it using Plotly.
+
+    Description:
+        Creates a scatter plot to visualize the relationship between 'src_ip' and 'dst_port' in 
+        network traffic data. It distinguishes normal data points from anomalies by plotting them in different colors 
+        and styles.
+    """
     x_data = 'src_ip'
     y_data = 'service'
 
@@ -278,7 +425,22 @@ def plot_src_ip_vs_dst_port(data, anomalies):
         fig.show()
 
 
-def plot_dst_host_count_vs_dst_host_srv_count(data, anomalies):
+def plot_dst_host_count_vs_dst_host_srv_count(data: pd.DataFrame, anomalies: pd.DataFrame):
+    """
+    Function: plot_dst_host_count_vs_dst_host_srv_count
+
+    Input:
+        - data: pd.DataFrame, A DataFrame containing the normal data with columns for 'dst_host_count' and 'dst_host_srv_count'.
+        - anomalies: pd.DataFrame, A DataFrame containing the anomalous data with columns for 'dst_host_count' and 'dst_host_srv_count'.
+
+    Output:
+        - None, The function visualizes the data in a scatter plot and displays it using Plotly.
+
+    Description:
+        Creates a scatter plot to visualize the relationship between 'dst_host_count' and 'dst_host_srv_count' in 
+        network traffic data. It distinguishes normal data points from anomalies by plotting them in different colors 
+        and styles.
+    """
     x_data = 'dst_host_count'
     y_data = 'dst_host_srv_count'
 
@@ -312,7 +474,26 @@ def plot_dst_host_count_vs_dst_host_srv_count(data, anomalies):
 
 
 
-def find_anomalies(data, model_file, feature):
+def find_anomalies(data: pd.DataFrame, model_file: str, feature: str):
+    """
+    Function: find_anomalies
+
+    Input:
+        - data: pd.DataFrame, A DataFrame containing the network traffic data to be analyzed for anomalies. 
+                                    The DataFrame should include relevant features such as 'src_ip' and other network attributes.
+        - model_file: str, Path to the pickle file containing the pre-trained model used for anomaly detection.
+        - feature: str, A string specifying which feature to visualize the anomalies for. It controls the plot 
+                          that will be generated based on detected anomalies.
+
+    Output:
+        - None, The function does not return any value but visualizes the detected anomalies and displays related 
+                  statistics, such as the number of anomalies and non-anomalies.
+
+    Description:
+        Detects anomalies in network traffic data using a pre-trained model stored in the specified pickle 
+        file. The function then visualizes the anomalies for a specific feature chosen by the user, and provides a count 
+        of detected anomalies and non-anomalies.
+    """
     with open(model_file, 'rb') as file:
         model = pickle.load(file)
 
