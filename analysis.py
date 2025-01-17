@@ -102,8 +102,7 @@ def process_pcap(file_path: str) -> pd.DataFrame:
     packet_counts = defaultdict(int)  
     srv_counts = defaultdict(int)     
     serror_counts = defaultdict(int)  
-    rerror_counts = defaultdict(int)  
-    timestamps = defaultdict(lambda: defaultdict(list))
+    rerror_counts = defaultdict(int) 
 
     previous_timestamp = None
 
